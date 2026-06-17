@@ -7,6 +7,8 @@
 <style>
   body { margin: 0; }
   select { -webkit-appearance: menulist; }
+  *, *::before, *::after { box-sizing: border-box; }
+  input[type="number"] { max-width: 100%; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -57,7 +59,7 @@
 }
 .ks-back img { width: 26px; height: 26px; border-radius: 50%; display: block; }
 @media print { .ks-back { display: none !important; } }
-body { padding-top: 48px !important; }
+body { padding-top: 48px !important; background: linear-gradient(160deg,#eef2f7 0%,#e0e8f0 100%) !important; min-height: 100vh; }
 @media print { body { padding-top: 0 !important; } }
 </style>
 <a class="ks-back" id="ksBack" href="https://kevinyicheng.github.io/kevin-supply-hub/">
@@ -196,7 +198,7 @@ function App() {
   const gap = p ? premCl - premNo : 0;
 
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(160deg,#eef2f7 0%,#e0e8f0 100%)", padding: "24px 16px", fontFamily: "system-ui,'Noto Sans TC',sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(160deg,#eef2f7 0%,#e0e8f0 100%)", padding: "24px 16px", fontFamily: "system-ui,'Noto Sans TC',sans-serif", maxWidth: "100vw", overflow: "hidden" }}>
       <div style={{ maxWidth: 470, margin: "0 auto" }}>
 
         <div style={{ textAlign: "center", marginBottom: 22 }}>
@@ -250,9 +252,9 @@ function App() {
             <span style={{ fontSize: 16, fontWeight: 800, color: "#1a73e8" }}>今年</span>（本年度）
           </div>
           <div style={{ fontSize: 11, color: "#a0aec0", marginBottom: 8 }}>請輸入今年出險次數與車體險保費。</div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 18, alignItems: "stretch" }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 18, alignItems: "stretch", overflow: "hidden" }}>
             <Stepper label="出險次數" value={thisYear} onChange={setThisYear} max={6} />
-            <div style={{ flex: 1.6, background: "#fff", border: "1px solid #d0d7de", borderRadius: 10, padding: "8px 8px" }}>
+            <div style={{ flex: 1.6, minWidth: 0, background: "#fff", border: "1px solid #d0d7de", borderRadius: 10, padding: "8px 8px" }}>
               <div style={{ fontSize: 11, color: "#718096", marginBottom: 6, textAlign: "center" }}>車體險保費</div>
               <div style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 13, color: "#57606a" }}>
                 <span>NT$</span>
