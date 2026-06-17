@@ -33,14 +33,21 @@ const AGE_SEX = {
   female: { "未滿20": 1.70, "20-25": 1.57, "25-30": 1.04, "30-60": 0.90, "60-70": 0.96, "70以上": 0.96 },
 };
 
-const fmt = (n) => (n > 0 ? `+${n}%` : n < 0 ? `${n}%` : "0%");
-const fmtN = (n) => (n > 0 ? `▲ +${n}%` : n < 0 ? `▼ ${n}%` : "0%");
+const fmtN = (n) => (n > 0 ? `▲ +${n}%` : n < 0 ? `▼ ${n}%` : "持平");
+// 賠款係數以小數顯示：-60 → -0.6、20 → +0.2、0 → 0
+const fmtDec = (pct) => {
+  const d = Math.round(pct) / 100;
+  if (d === 0) return "0";
+  return d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1);
+};
+// 金額增減文字
+const deltaTxt = (d) => d > 0 ? `增加 NT$ ${d.toLocaleString()}` : d < 0 ? `減少 NT$ ${Math.abs(d).toLocaleString()}` : "持平";
 
 const Tile = ({ label, main, sub, variant }) => {
   const colors = {
     neutral: { bg: "#f6f8fa", border: "#d0d7de", mainC: "#24292f", subC: "#57606a" },
+    green:   { bg: "#eafaf0", border: "#57c87a", mainC: "#1a7f37", subC: "#1a7f37" },
     red:     { bg: "#fff0f0", border: "#f08080", mainC: "#a30000", subC: "#a30000" },
-    blue:    { bg: "#e8f0fe", border: "#7aa7ec", mainC: "#1557b0", subC: "#1557b0" },
   };
   const c = colors[variant] || colors.neutral;
   return (
@@ -99,15 +106,25 @@ function App() {
 
   const ageSex = entity === "corp" ? 1.0 : AGE_SEX[sex][age];
   const cur = histCoef(hist);
-  const next = histCoef([hist[1], hist[2], thisYear]);
-  const multCur = ageSex + cur.coef / 100;
-  const multNext = ageSex + next.coef / 100;
-  const ratio = multCur ? Math.round(multNext / multCur * 100) / 100 : 0;
-  const pc = multCur ? Math.round((multNext / multCur - 1) * 1000) / 10 : 0;
+  const roll = [hist[1], hist[2]];
+  const nextNo = histCoef([...roll, 0]);
+  const nextCl = histCoef([...roll, thisYear]);
 
-  const base = prem ? +prem / multCur : 0;
-  const nextPrem = prem ? Math.round(base * multNext) : 0;
-  const diff = prem ? nextPrem - +prem : 0;
+  const multCur = ageSex + cur.coef / 100;
+  const multNo = ageSex + nextNo.coef / 100;
+  const multCl = ageSex + nextCl.coef / 100;
+
+  const pcNo = multCur ? Math.round((multNo / multCur - 1) * 1000) / 10 : 0;
+  const pcCl = multCur ? Math.round((multCl / multCur - 1) * 1000) / 10 : 0;
+  const gapPc = Math.round((pcCl - pcNo) * 10) / 10;
+
+  const p = +prem || 0;
+  const base = p ? p / multCur : 0;
+  const premNo = p ? Math.round(base * multNo) : 0;
+  const premCl = p ? Math.round(base * multCl) : 0;
+  const saveNo = p ? premNo - p : 0;
+  const addCl = p ? premCl - p : 0;
+  const gap = p ? premCl - premNo : 0;
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(160deg,#eef2f7 0%,#e0e8f0 100%)", padding: "24px 16px", fontFamily: "system-ui,'Noto Sans TC',sans-serif" }}>
@@ -161,64 +178,98 @@ function App() {
 
           <div style={{ fontSize: 13, color: "#4a5568", fontWeight: 700, marginBottom: 8 }}>
             <span style={{ background: "#1a73e8", color: "#fff", borderRadius: 99, padding: "1px 8px", fontSize: 11, marginRight: 6 }}>3</span>
-            今年（本年度）出險次數
+            <span style={{ fontSize: 16, fontWeight: 800, color: "#1a73e8" }}>今年</span>（本年度）
           </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-            <Stepper label="今年出險" value={thisYear} onChange={setThisYear} max={6} />
-            <div style={{ flex: 2 }} />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-            <Tile label="目前從人係數" main={multCur.toFixed(2)} sub={`賠款 ${fmt(cur.coef)}`} variant="neutral" />
-            <Tile label="明年從人係數" main={multNext.toFixed(2)} sub={`賠款 ${fmt(next.coef)}`} variant="red" />
-            <Tile label="倍率變化" main={`×${ratio}`} sub={`${multCur.toFixed(2)}→${multNext.toFixed(2)}`} variant="blue" />
-          </div>
-
-          <div style={{ background: "#f6f8fa", borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 12, color: "#4a5568" }}>
-            <div style={{ fontWeight: 600, color: "#2d3748", marginBottom: 6 }}>📊 明年賠款點數（視窗：2年前 + 去年 + 今年）</div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-              <span>無賠款 {next.noYrs} 年</span><span style={{ color: "#1a7f37", fontWeight: 600 }}>−{next.noYrs} 點</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span>3年內賠款 {next.total} 次</span><span style={{ color: next.cp > 0 ? "#a30000" : "#718096", fontWeight: 600 }}>+{next.cp} 點</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, color: "#2d3748", paddingTop: 6, borderTop: "1px dashed #d0d7de" }}>
-              <span>合計</span>
-              <span style={{ color: next.pts > 0 ? "#a30000" : next.pts < 0 ? "#1a7f37" : "#4a5568" }}>{next.pts} 點 → 賠款係數 {fmt(next.coef)}</span>
-            </div>
-          </div>
-
-          <div style={{ background: "#fff0f0", border: "1.5px solid #f08080", borderRadius: 10, padding: 16, textAlign: "center" }}>
-            <div style={{ fontSize: 12, color: "#a30000", marginBottom: 4 }}>今年出 {thisYear} 次險，明年保費</div>
-            <div style={{ fontSize: 34, fontWeight: 800, color: "#a30000", lineHeight: 1 }}>{fmtN(pc)}</div>
-          </div>
-
-          <div style={{ background: "#f6f8fa", borderRadius: 10, padding: 12, marginTop: 14 }}>
-            <div style={{ fontSize: 12, color: "#57606a", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>💰 本年保費試算（選填）</div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: "#57606a" }}>
-              <span>NT$</span>
-              <input type="number" placeholder="18,000" value={prem}
-                onChange={(e) => setPrem(e.target.value)}
-                style={{ flex: 1, minWidth: 0, border: "1px solid #d0d7de", borderRadius: 8, padding: "6px 10px", fontSize: 13, outline: "none", background: "#fff" }} />
-              <span>元</span>
-            </div>
-            <div style={{ fontSize: 11, color: "#a0aec0", marginTop: 6 }}>＊請填入本年車體險保費。</div>
-            {prem && (
-              <div style={{ marginTop: 10, textAlign: "center", padding: "10px", background: "#fff0f0", borderRadius: 8 }}>
-                <div style={{ fontSize: 11, color: "#a30000" }}>明年續保保費約</div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: "#a30000", marginTop: 2 }}>NT$ {nextPrem.toLocaleString()} 元</div>
-                <div style={{ fontSize: 12, color: "#a30000", marginTop: 2 }}>（增加 {diff.toLocaleString()} 元）</div>
-                <div style={{ fontSize: 10, color: "#b0837b", marginTop: 6, lineHeight: 1.6 }}>＊未計車齡（製造年度係數）逐年下降，實收通常略低於此。</div>
+          <div style={{ fontSize: 11, color: "#a0aec0", marginBottom: 8 }}>請輸入今年出險次數與車體險保費。</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 18, alignItems: "stretch" }}>
+            <Stepper label="出險次數" value={thisYear} onChange={setThisYear} max={6} />
+            <div style={{ flex: 1.6, background: "#fff", border: "1px solid #d0d7de", borderRadius: 10, padding: "8px 8px" }}>
+              <div style={{ fontSize: 11, color: "#718096", marginBottom: 6, textAlign: "center" }}>車體險保費</div>
+              <div style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 13, color: "#57606a" }}>
+                <span>NT$</span>
+                <input type="number" placeholder="18,000" value={prem}
+                  onChange={(e) => setPrem(e.target.value)}
+                  style={{ flex: 1, minWidth: 0, border: "1px solid #d0d7de", borderRadius: 6, padding: "5px 8px", fontSize: 13, outline: "none", background: "#fff" }} />
+                <span>元</span>
               </div>
-            )}
+            </div>
           </div>
+
+          {/* 試算結果 */}
+          <div style={{ marginBottom: 12, paddingTop: 4, borderTop: "1px dashed #e2e8f0" }}>
+            <span style={{ display: "inline-block", marginTop: 12, background: "#1a7f37", color: "#fff", borderRadius: 99, padding: "3px 14px", fontSize: 13, fontWeight: 700 }}>試算結果</span>
+          </div>
+
+          {/* 三情境從人係數 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+            <Tile label="目前賠款係數" main={fmtDec(cur.coef)} sub={`從人 ${multCur.toFixed(2)}`} variant="neutral" />
+            <Tile label="明年不出險" main={fmtDec(nextNo.coef)} sub={`從人 ${multNo.toFixed(2)}`} variant="green" />
+            <Tile label={`明年出${thisYear}次`} main={fmtDec(nextCl.coef)} sub={`從人 ${multCl.toFixed(2)}`} variant="red" />
+          </div>
+
+          {/* 不出險 vs 出險 保費變化 */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <div style={{ flex: 1, background: "#eafaf0", border: "1.5px solid #57c87a", borderRadius: 10, padding: "12px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#1a7f37", marginBottom: 4 }}>不出險，明年保費</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#1a7f37", lineHeight: 1 }}>{fmtN(pcNo)}</div>
+              {p > 0 && <div style={{ fontSize: 12, color: "#1a7f37", marginTop: 6 }}>{deltaTxt(saveNo)}</div>}
+            </div>
+            <div style={{ flex: 1, background: "#fff0f0", border: "1.5px solid #f08080", borderRadius: 10, padding: "12px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#a30000", marginBottom: 4 }}>出{thisYear}次，明年保費</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#a30000", lineHeight: 1 }}>{fmtN(pcCl)}</div>
+              {p > 0 && <div style={{ fontSize: 12, color: "#a30000", marginTop: 6 }}>{deltaTxt(addCl)}</div>}
+            </div>
+          </div>
+
+          {/* 機會成本合計 */}
+          <div style={{ background: "#e8f0fe", border: "1.5px solid #7aa7ec", borderRadius: 10, padding: 14, textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "#1557b0", marginBottom: 4 }}>出 vs 不出 的真實代價（機會成本）</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: "#1557b0", lineHeight: 1.05 }}>
+              {p > 0 ? `NT$ ${gap.toLocaleString()} 元` : `今年保費的 ${gapPc}%`}
+            </div>
+            <div style={{ fontSize: 11, color: "#3b6cb5", marginTop: 8, paddingTop: 8, borderTop: "1px dashed #7aa7ec", lineHeight: 1.7 }}>
+              {p > 0 ? `相當於今年保費的 ${gapPc}%　｜　` : ""}＝ 多繳的 ＋ 放棄的折扣
+            </div>
+          </div>
+
+          {/* 點數拆解 */}
+          <div style={{ background: "#f6f8fa", borderRadius: 10, padding: 12, marginTop: 14, fontSize: 12, color: "#4a5568" }}>
+            <div style={{ fontWeight: 600, color: "#2d3748", marginBottom: 6 }}>📊 明年賠款點數對照（視窗：2年前 + 去年 + 今年）</div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+              <span style={{ color: "#1a7f37" }}>不出險：無賠款 {nextNo.noYrs} 年、賠款 {nextNo.total} 次</span>
+              <span style={{ color: "#1a7f37", fontWeight: 600 }}>{nextNo.pts} 點 → {fmtDec(nextNo.coef)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#a30000" }}>出{thisYear}次：無賠款 {nextCl.noYrs} 年、賠款 {nextCl.total} 次</span>
+              <span style={{ color: "#a30000", fontWeight: 600 }}>{nextCl.pts} 點 → {fmtDec(nextCl.coef)}</span>
+            </div>
+          </div>
+
+          {/* 明年續保保費（金額） */}
+          {p > 0 && (
+            <div style={{ background: "#f6f8fa", borderRadius: 10, padding: 12, marginTop: 14 }}>
+              <div style={{ fontSize: 12, color: "#57606a", marginBottom: 8, display: "flex", alignItems: "center", gap: 5, fontWeight: 600 }}>💰 明年續保保費</div>
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, color: "#1a7f37" }}>不出險</span>
+                  <span><b style={{ fontSize: 16, color: "#1a7f37" }}>NT$ {premNo.toLocaleString()}</b> <span style={{ fontSize: 11, color: "#718096" }}>（{deltaTxt(saveNo)}）</span></span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: 13, color: "#a30000" }}>出{thisYear}次</span>
+                  <span><b style={{ fontSize: 16, color: "#a30000" }}>NT$ {premCl.toLocaleString()}</b> <span style={{ fontSize: 11, color: "#718096" }}>（{deltaTxt(addCl)}）</span></span>
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: "#b0837b", marginTop: 8, lineHeight: 1.6 }}>＊未計車齡（製造年度係數）逐年下降，實收通常略低於此。</div>
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: 16, background: "#fffbeb", borderRadius: 12, padding: "14px 18px", border: "1px solid #f6e05e", fontSize: 12, color: "#7b6317", lineHeight: 1.9 }}>
           <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>📋 計算規則</div>
           保費 = 基本保費 × 製造年度係數 ×（年齡性別係數 ＋ 賠款係數）<br />
-          <b>第一年投保</b>：無賠款 0 年、賠款 0 次 → 0 點 → 賠款係數 <b>0</b>（不加不減）。<br />
-          無賠款每年 −0.2（上限 −0.6）；賠款第 2 次起每次 +0.2。
+          <b>第一年投保</b>：0 點 → 賠款係數 0（不加不減）。<br />
+          無賠款每年 −0.2（上限 −0.6）；賠款第 2 次起每次 +0.2。<br />
+          <b>機會成本</b> ＝ 出險多繳的 ＋ 不出險本可再省的折扣。
         </div>
         <div style={{ textAlign: "center", marginTop: 10, fontSize: 11, color: "#b0bad0" }}>
           95.07.14 汽車保險規章費率 · 僅供業務試算參考
